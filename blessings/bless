@@ -1,0 +1,206 @@
+#!/usr/bin/env python
+
+import sys
+import Tkinter as tk
+import zlib
+
+blessed_file   = "blessings/blessed.txt"
+blessings_file = "blessings/blessings.txt"
+
+# To change passwords, use the password_hash(new_password) to get the hash then
+# paste it here.
+te_manger_hash = 3787418698
+pe_manager_hash = 3165353555
+engineer_hash = 1835887934
+
+class Error(tk.Frame):
+    def __init__(self, message):
+        tk.Frame.__init__(self)
+        self.pack()
+
+        self.MSG = tk.Message(self, width = "20c")
+        self.MSG["text"] = "ERROR: " + message
+        self.MSG.pack({"side": "top"})
+
+        self.QUIT = tk.Button(self)
+        self.QUIT["text"] = "QUIT"
+        self.QUIT["fg"] = "red"
+        self.QUIT["command"] = self.quit
+        self.QUIT.pack({"side": "bottom"})
+
+def error(s):
+    app = Error(s)
+    app.mainloop()
+    sys.exit(255)
+
+def try_open(filename):
+    try:
+        f = open(filename)
+    except:
+        error("Failed to open " + filename)
+    return f
+
+def read_blessings(f):
+    pairs = []
+    for l in f.readlines():
+        words = l.split()
+        if len(words) == 2:
+            pairs.append((words[0], words[1]))
+    return pairs
+
+def first(t):
+    return t[0]
+
+def exit(n):
+    sys.exit(n)
+
+def difference(a, b):
+    r = []
+    for x in a:
+        if x not in b:
+            r.append(x)
+    return r
+
+def verify(blessings):
+    r = []
+    for (file, crc) in blessings:
+        if crc != ("%08x" % zlib.adler32(file)):
+            print "%s %s %s" % (file, str(crc), str(zlib.adler32(file)))
+            r.append(file)
+    return r
+
+def enumerate(l):
+    r = []
+    i = 0
+    for x in l:
+        r.append((i,x))
+        i = i + 1
+    return r
+
+class Ask(tk.Frame):
+    def __init__(self, question, answers):
+        tk.Frame.__init__(self)
+        self.pack()
+
+        self.QUESTION = tk.Message(self, width = "40c")
+        self.QUESTION["text"] = question
+        self.QUESTION.pack({"side": "top"})
+
+        self.ANSWERS = tk.Frame()
+        self.ANSWERS.pack({"side": "bottom"})
+
+        self.ANSWERS.ANS=[]
+        for (i,(ans, act)) in enumerate(answers):
+            self.ANSWERS.ANS.append(tk.Button(self))
+            self.ANSWERS.ANS[i]["text"] = ans
+            # self.ANS[i]["fg"] = "red"
+            self.ANSWERS.ANS[i]["command"] = self.finish(act)
+            self.ANSWERS.ANS[i].pack({"side": "top"})
+
+    def finish(self, act):
+        return lambda: act()
+        self.quit()
+
+def ask(question, answers):
+    return Ask(question, answers).mainloop()
+
+def last_writes(files):
+    try:
+        w = open(blessings_file, "w")
+    except:
+        error("Failed to write " + blessings_file)
+
+    for f in files:
+        w.write(f + " " + "%08x" % zlib.adler32(f) + "\n")
+
+    w.close()
+
+def make_an_exception():
+    if verify_password("Engineer", engineer_hash):
+        exit_blessed()
+    else:
+        abort_abort()
+
+# Always returns true if it returns
+def verify_password(name, pwhash):
+
+    verified = False
+
+    while not verified:
+        print "Please enter password for %s: " % name
+        pw = sys.stdin.readline().lstrip().rstrip()
+        if check_password(pw, pwhash):
+            verified = True
+        else:
+            print "Password not accepted"
+
+    return True
+
+
+def exit_blessed():
+    print "bless you"
+    exit(0)
+
+def abort_abort():
+    print "ABORT ABORT!"
+    exit(255)
+
+def ready_to_bless(unholy, tampered, allfiles):
+    msg = ""
+    if unholy:
+        msg = (msg +
+                "These files are supposed to be blessed but aren't:\n  " +
+                "\n  ".join(unholy) + "\n")
+
+    if tampered:
+        msg = (msg +
+                "These files contain unsanctioned modifications:\n  " +
+                "\n  ".join(tampered) + "\n")
+
+    msg = (msg +
+            "If you've completed QA, go ahead and bless them.\n" +
+            "Otherwise, make an exception for this session.\n"
+            "If you're running production, please abort or you will be cursed.")
+
+    return ask(msg,
+        [ ("Bless me for I have completed QA",
+            lambda: last_writes(allfiles)),
+          ("I'm a TE - make an exception for this session",
+            make_an_exception),
+          ("I'm running production - abort! abort!",
+            abort_abort)
+        ])
+
+def password_hash(pw):
+    return 0xFFFFFFFF & zlib.crc32(pw)
+
+def check_password(candidate, pwhash):
+    return password_hash(candidate) == pwhash
+
+def check_blessings():
+    blessed = try_open(blessed_file).read().split()
+
+    try:
+        f = open(blessings_file)
+    except:
+        blessings = ""
+    else:
+        blessings = read_blessings(f)
+        f.close()
+
+    unholy = difference(blessed, map(first, blessings))
+    tampered = verify(blessings)
+
+    if len(unholy) or len(tampered):
+        ready_to_bless(unholy, tampered, blessed)
+
+try:
+    print "check_blessings ..."
+    check_blessings()
+except:
+    "abort"
+    abort_abort()
+else:
+    print "checked"
+    exit_blessed()
+
