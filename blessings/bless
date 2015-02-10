@@ -1,30 +1,37 @@
 #!/usr/bin/env python
 
-# TODO:
-#  hangs on error()
-
-import copy
 import sys
 import Tkinter as tk
-import tkMessageBox as box
 import zlib
 
-# My password dialog
-from password import password_dialog
+blessed_file   = "blessings/blessed.txt"
+blessings_file = "blessings/blessings.txt"
 
 # To change passwords, use the password_hash(new_password) to get the hash then
 # paste it here.
-te_manger_hash = 197657346
-pe_manager_hash = 150209158
-engineer_hash = 190841556
+te_manger_hash = 3787418698
+pe_manager_hash = 3165353555
+engineer_hash = 1835887934
 
-blessed_file   = "blessings/blessed.txt"
-blessings_file = "blessings/blessings.db"
+class Error(tk.Frame):
+    def __init__(self, message):
+        tk.Frame.__init__(self)
+        self.pack()
+
+        self.MSG = tk.Message(self, width = "20c")
+        self.MSG["text"] = "ERROR: " + message
+        self.MSG.pack({"side": "top"})
+
+        self.QUIT = tk.Button(self)
+        self.QUIT["text"] = "QUIT"
+        self.QUIT["fg"] = "red"
+        self.QUIT["command"] = self.quit
+        self.QUIT.pack({"side": "bottom"})
 
 def error(s):
-    print s
-    box.showerror("ERROR", s)
-    exit(255)
+    app = Error(s)
+    app.mainloop()
+    sys.exit(255)
 
 def try_open(filename):
     try:
@@ -44,6 +51,9 @@ def read_blessings(f):
 def first(t):
     return t[0]
 
+def exit(n):
+    sys.exit(n)
+
 def difference(a, b):
     r = []
     for x in a:
@@ -54,9 +64,8 @@ def difference(a, b):
 def verify(blessings):
     r = []
     for (file, crc) in blessings:
-        contents = readfile(file)
-        if crc != ("%08x" % password_hash(contents)):
-            print "%s %s %s" % (file, str(crc), str(password_hash(contents)))
+        if crc != ("%08x" % zlib.adler32(file)):
+            print "%s %s %s" % (file, str(crc), str(zlib.adler32(file)))
             r.append(file)
     return r
 
@@ -68,9 +77,10 @@ def enumerate(l):
         i = i + 1
     return r
 
-class Ask(tk.Toplevel):
+class Ask(tk.Frame):
     def __init__(self, question, answers):
-        tk.Toplevel.__init__(self)
+        tk.Frame.__init__(self)
+        self.pack()
 
         self.QUESTION = tk.Message(self, width = "40c")
         self.QUESTION["text"] = question
@@ -79,62 +89,37 @@ class Ask(tk.Toplevel):
         self.ANSWERS = tk.Frame()
         self.ANSWERS.pack({"side": "bottom"})
 
-        self.protocol("WM_DELETE_WINDOW", self.quit)
-
         self.ANSWERS.ANS=[]
         for (i,(ans, act)) in enumerate(answers):
-            print "appending button", i, ans, act.__name__
             self.ANSWERS.ANS.append(tk.Button(self))
             self.ANSWERS.ANS[i]["text"] = ans
             # self.ANS[i]["fg"] = "red"
-            self.ANSWERS.ANS[i]["command"] = self.mk_act_and_quit(act)
+            self.ANSWERS.ANS[i]["command"] = self.finish(act)
             self.ANSWERS.ANS[i].pack({"side": "top"})
 
-    def mk_act_and_quit(self, act):
-        def f():
-            print "action", act.__name__
-            act(self)
-            self.quit()
-        return f
-
-def make_an_exception(parent):
-    global global_blessed
-
-    if password_dialog(parent, "Engineer password:", engineer_hash):
-        global_blessed = True
-
+    def finish(self, act):
+        return lambda: act()
+        self.quit()
 
 def ask(question, answers):
     return Ask(question, answers).mainloop()
 
-def readfile(filename):
-    try:
-        f = open(filename)
-        contents = f.read()
-        f.close()
-        return contents
-    except:
-        error("Failed to read: " + filename)
-
-def last_writes(parent, files):
-    global global_blessed
-
-    if not (password_dialog(parent, "TE manager password:", te_manger_hash)
-        and password_dialog(parent, "PE manager password:", pe_manager_hash)):
-        return
-
+def last_writes(files):
     try:
         w = open(blessings_file, "w")
     except:
         error("Failed to write " + blessings_file)
 
     for f in files:
-        contents = readfile(f)
-        w.write(f + " " + "%08x" % password_hash(contents) + "\n")
+        w.write(f + " " + "%08x" % zlib.adler32(f) + "\n")
 
     w.close()
 
-    global_blessed = True
+def make_an_exception():
+    if verify_password("Engineer", engineer_hash):
+        exit_blessed()
+    else:
+        abort_abort()
 
 # Always returns true if it returns
 def verify_password(name, pwhash):
@@ -151,6 +136,14 @@ def verify_password(name, pwhash):
 
     return True
 
+
+def exit_blessed():
+    print "bless you"
+    exit(0)
+
+def abort_abort():
+    print "ABORT ABORT!"
+    exit(255)
 
 def ready_to_bless(unholy, tampered, allfiles):
     msg = ""
@@ -171,16 +164,12 @@ def ready_to_bless(unholy, tampered, allfiles):
 
     return ask(msg,
         [ ("Bless me for I have completed QA",
-            lambda parent: last_writes(parent, allfiles)),
+            lambda: last_writes(allfiles)),
           ("I'm a TE - make an exception for this session",
             make_an_exception),
           ("I'm running production - abort! abort!",
-            noblessing)
+            abort_abort)
         ])
-
-def noblessing(parent):
-    global global_blessed
-    global_blessed = False
 
 def password_hash(pw):
     return 0xFFFFFFFF & zlib.crc32(pw)
@@ -205,20 +194,13 @@ def check_blessings():
     if len(unholy) or len(tampered):
         ready_to_bless(unholy, tampered, blessed)
 
-# A status of 0 means the program terminated normally and the testflow should continue
-# Too bad I'm using a global variable for this
-
-global_blessed = False
-
-def exit(n):
-    sys.exit(n)
-
-
-if __name__ == "__main__":
+try:
     print "check_blessings ..."
     check_blessings()
+except:
+    "abort"
+    abort_abort()
+else:
+    print "checked"
+    exit_blessed()
 
-    if global_blessed:
-        exit(0)
-    else:
-        exit(255)

@@ -1,5 +1,4 @@
 
 blessings/blessed.txt
-blessings/blessings.db
+blessings/blessings.txt
 *.un~
-*.pyc
