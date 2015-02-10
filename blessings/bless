@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # TODO:
-#  return 255 when it should bless
+#  hangs on error()
 
 import copy
 import sys
@@ -189,8 +189,6 @@ def check_password(candidate, pwhash):
     return password_hash(candidate) == pwhash
 
 def check_blessings():
-    global global_blessed
-
     blessed = try_open(blessed_file).read().split()
 
     try:
@@ -206,8 +204,6 @@ def check_blessings():
 
     if len(unholy) or len(tampered):
         ready_to_bless(unholy, tampered, blessed)
-    else:
-        global_blessed = True
 
 # A status of 0 means the program terminated normally and the testflow should continue
 # Too bad I'm using a global variable for this
